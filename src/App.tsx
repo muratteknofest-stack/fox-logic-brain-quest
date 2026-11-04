@@ -17,13 +17,13 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
-import { poki } from '../poki/pokiBridge';
+import { poki } from './poki/pokiBridge';
 import {
   PokiLevel,
   ALL_POKI_LEVELS,
   GameCard,
   GameOption,
-} from '../poki/levelsData';
+} from './poki/levelsData';
 
 type GameScreen = 'TITLE' | 'MAP' | 'PLAYING' | 'VICTORY' | 'GAME_OVER';
 
