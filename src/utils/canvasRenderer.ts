@@ -433,6 +433,16 @@ export interface ReelRenderState {
  * - Parallax Floating Particle Orbs
  * - Interactive 3D Depth on Matrices, Cubes, and Option Cards
  */
+/**
+ * Enhanced 9:16 Scene Canvas Render Function
+ * Features:
+ * - Camera Shake (Sarsılma) on question entry, countdown start, and answer reveal
+ * - Optical Bloom & Solar Flare (Parlama) with rotating light beams and expanding shockwaves
+ * - 3D Layer Slabs with Ambient Occlusion Shadows
+ * - Dynamic Floating Tilt & Breathing Animation
+ * - Parallax Floating Particle Orbs
+ * - Interactive 3D Depth on Matrices, Cubes, and Option Cards
+ */
 export function renderReelFrame(
   ctx: CanvasRenderingContext2D,
   state: ReelRenderState
@@ -448,6 +458,49 @@ export function renderReelFrame(
   } = state;
 
   const theme = REEL_THEME_CONFIGS[themeId] || REEL_THEME_CONFIGS.space_academy;
+
+  // =========================================================================
+  // TIMING & CAMERA SHAKE (SARSILMA) PHYSICS
+  // =========================================================================
+  const countdownStart = 1.5;
+  const revealTime = countdownStart + countdownSeconds;
+  const remaining = Math.max(
+    0,
+    Math.min(countdownSeconds, countdownSeconds - (elapsedSec - countdownStart))
+  );
+  const ratio = remaining / Math.max(1, countdownSeconds);
+
+  // 1. Entry / Question Change Impact Shake (elapsedSec < 0.65)
+  const entryT = Math.max(0, 1 - elapsedSec / 0.6);
+  const entryShake = Math.sin(elapsedSec * 48) * 18 * entryT;
+
+  // 2. Countdown Start Punch (elapsedSec around countdownStart)
+  const cdPunchT =
+    elapsedSec >= countdownStart - 0.1 && elapsedSec < countdownStart + 0.35
+      ? Math.max(0, 1 - (elapsedSec - (countdownStart - 0.1)) / 0.45)
+      : 0;
+  const cdPunchShake = Math.sin((elapsedSec - countdownStart) * 55) * 14 * cdPunchT;
+
+  // 3. Last 3 Seconds Ticking Heartbeat Pulses
+  let tickShake = 0;
+  if (remaining <= 3 && remaining > 0) {
+    const frac = (countdownSeconds - (elapsedSec - countdownStart)) % 1;
+    if (frac < 0.22) {
+      const punchIntensity = (4 - remaining) * 3;
+      tickShake = Math.sin(frac * Math.PI * 12) * punchIntensity * (1 - frac / 0.22);
+    }
+  }
+
+  // 4. Reveal Answer / Countdown End Earthquake Shake
+  let revealShake = 0;
+  if (revealAnswer && elapsedSec >= revealTime && elapsedSec < revealTime + 0.85) {
+    const dSec = elapsedSec - revealTime;
+    revealShake = Math.sin(dSec * 52) * 28 * Math.exp(-dSec * 3.8);
+  }
+
+  const totalShakeX = (entryShake + cdPunchShake + tickShake + revealShake);
+  const totalShakeY = Math.cos(elapsedSec * 38) * Math.abs(totalShakeX) * 0.65;
+  const totalShakeAngle = (totalShakeX / REEL_WIDTH) * 0.016;
 
   // 1. Dynamic Background with Parallax Floating Bokeh Orbs
   const grad = ctx.createLinearGradient(0, 0, 0, REEL_HEIGHT);
@@ -471,6 +524,14 @@ export function renderReelFrame(
     ctx.fill();
   }
   ctx.restore();
+
+  // =========================================================================
+  // APPLY CAMERA SHAKE MATRIX TO FOREGROUND SCENE
+  // =========================================================================
+  ctx.save();
+  ctx.translate(REEL_WIDTH / 2, REEL_HEIGHT / 2);
+  ctx.rotate(totalShakeAngle);
+  ctx.translate(-REEL_WIDTH / 2 + totalShakeX, -REEL_HEIGHT / 2 + totalShakeY);
 
   // 2. Top Header Banner with 3D Slab Depth + BİLSEM Junior Fox Mascot
   const headX = 56;
@@ -676,7 +737,7 @@ export function renderReelFrame(
     ctx.fill();
     ctx.restore();
 
-    // Floating cube sway animation
+    // Floating cube hover animation
     const cubeHover = Math.sin(elapsedSec * 2.5) * 5;
 
     for (const c of sortedCubes) {
@@ -790,13 +851,6 @@ export function renderReelFrame(
   ctx.restore(); // Restore Stage Tilt Transform
 
   // 5. Countdown Bar with Glowing 3D Glass Tube (1138..1210)
-  const countdownStart = 1.5;
-  const remaining = Math.max(
-    0,
-    Math.min(countdownSeconds, countdownSeconds - (elapsedSec - countdownStart))
-  );
-  const ratio = remaining / Math.max(1, countdownSeconds);
-
   draw3DSlabCard(
     ctx,
     56,
@@ -999,4 +1053,121 @@ export function renderReelFrame(
       ctx.fillText(subText, REEL_WIDTH / 2, 1790, REEL_WIDTH - 140);
     }
   }
+
+  // =========================================================================
+  // PARLAMA (LIGHT FLARE, OPTICAL BLOOM & 3D LIGHT BEAMS)
+  // =========================================================================
+
+  // A. Question Entry Anamorphic Light Flare & Flash (elapsedSec < 0.65)
+  if (elapsedSec < 0.65) {
+    const flashAlpha = Math.max(0, 1 - elapsedSec / 0.55) * 0.45;
+    ctx.save();
+    // Radial glow over the main stage
+    const entryFlare = ctx.createRadialGradient(
+      stageCenterX,
+      stageCenterY,
+      40,
+      stageCenterX,
+      stageCenterY,
+      500
+    );
+    entryFlare.addColorStop(0, `rgba(255, 255, 255, ${flashAlpha})`);
+    entryFlare.addColorStop(0.4, `rgba(251, 191, 36, ${flashAlpha * 0.6})`);
+    entryFlare.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = entryFlare;
+    ctx.fillRect(0, 0, REEL_WIDTH, REEL_HEIGHT);
+
+    // Horizontal Anamorphic Light Streak across stage
+    const streakH = 80;
+    const streakGrad = ctx.createLinearGradient(0, stageCenterY - streakH, 0, stageCenterY + streakH);
+    streakGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    streakGrad.addColorStop(0.5, `rgba(255, 255, 255, ${flashAlpha * 0.7})`);
+    streakGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = streakGrad;
+    ctx.fillRect(0, stageCenterY - streakH, REEL_WIDTH, streakH * 2);
+    ctx.restore();
+  }
+
+  // B. Critical Countdown Pulse Bloom (remaining <= 3 && remaining > 0)
+  if (remaining <= 3 && remaining > 0) {
+    const pulseFactor = (3 - remaining) / 3;
+    const pulseAlpha = (0.15 + Math.sin(elapsedSec * 14) * 0.12) * pulseFactor;
+    ctx.save();
+    const borderGlow = ctx.createRadialGradient(
+      REEL_WIDTH / 2,
+      REEL_HEIGHT / 2,
+      REEL_WIDTH * 0.35,
+      REEL_WIDTH / 2,
+      REEL_HEIGHT / 2,
+      REEL_WIDTH * 0.75
+    );
+    borderGlow.addColorStop(0, 'rgba(239, 68, 68, 0)');
+    borderGlow.addColorStop(0.8, `rgba(239, 68, 68, ${pulseAlpha * 0.5})`);
+    borderGlow.addColorStop(1, `rgba(245, 158, 11, ${pulseAlpha})`);
+    ctx.fillStyle = borderGlow;
+    ctx.fillRect(0, 0, REEL_WIDTH, REEL_HEIGHT);
+    ctx.restore();
+  }
+
+  // C. Answer Reveal Mega-Bloom, Volumetric Beams & Expanding Shockwave Ring
+  if (revealAnswer && elapsedSec >= revealTime && elapsedSec < revealTime + 1.6) {
+    const dSec = elapsedSec - revealTime;
+    const bloomAlpha = Math.max(0, 1 - dSec / 1.4);
+
+    // Center of winner option card
+    const winnerIdx = puzzle.correctOptionIndex;
+    const winCol = winnerIdx % 2;
+    const winRow = Math.floor(winnerIdx / 2);
+    const winCx = 56 + winCol * (optW + 32) + optW / 2;
+    const winCy = 1230 + winRow * (optH + 28) + optH / 2;
+
+    ctx.save();
+    // 1. Expanding Neon Shockwave Ring
+    const waveRadius = dSec * 420;
+    const waveAlpha = Math.max(0, 1 - dSec / 0.85);
+    ctx.beginPath();
+    ctx.arc(winCx, winCy, waveRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(52, 211, 153, ${waveAlpha})`;
+    ctx.lineWidth = 14 * (1 - dSec / 0.85);
+    ctx.shadowColor = '#10B981';
+    ctx.shadowBlur = 32;
+    ctx.stroke();
+
+    // 2. Rotating 3D Volumetric Rays (12 beams)
+    const beamCount = 12;
+    const rayRot = elapsedSec * 1.5;
+    ctx.translate(winCx, winCy);
+    for (let b = 0; b < beamCount; b++) {
+      const angle = rayRot + (b * Math.PI * 2) / beamCount;
+      const beamLen = 380 * Math.min(1, dSec * 4);
+      const halfW = 0.12;
+
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(angle - halfW) * beamLen, Math.sin(angle - halfW) * beamLen);
+      ctx.lineTo(Math.cos(angle + halfW) * beamLen, Math.sin(angle + halfW) * beamLen);
+      ctx.closePath();
+
+      const beamGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, beamLen);
+      beamGrad.addColorStop(0, `rgba(254, 240, 138, ${bloomAlpha * 0.45})`);
+      beamGrad.addColorStop(0.5, `rgba(16, 185, 129, ${bloomAlpha * 0.25})`);
+      beamGrad.addColorStop(1, 'rgba(16, 185, 129, 0)');
+      ctx.fillStyle = beamGrad;
+      ctx.fill();
+    }
+    ctx.translate(-winCx, -winCy);
+
+    // 3. Central Solar Flare Bloom
+    const flareGrad = ctx.createRadialGradient(winCx, winCy, 20, winCx, winCy, 360);
+    flareGrad.addColorStop(0, `rgba(255, 255, 255, ${bloomAlpha * 0.85})`);
+    flareGrad.addColorStop(0.3, `rgba(251, 191, 36, ${bloomAlpha * 0.55})`);
+    flareGrad.addColorStop(0.7, `rgba(16, 185, 129, ${bloomAlpha * 0.25})`);
+    flareGrad.addColorStop(1, 'rgba(16, 185, 129, 0)');
+    ctx.fillStyle = flareGrad;
+    ctx.fillRect(0, 0, REEL_WIDTH, REEL_HEIGHT);
+    ctx.restore();
+  }
+
+  // Restore camera shake transform
+  ctx.restore();
 }
