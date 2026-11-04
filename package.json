@@ -1,0 +1,26 @@
+{
+  "name": "fox-logic-brain-quest",
+  "version": "1.0.0",
+  "private": false,
+  "description": "HTML5 casual puzzle & brain training game ready for Poki with PokiSDK integration and 50 unlockable levels.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "package:poki": "vite build && cd dist && zip -r ../fox-logic-poki.zip ."
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "lucide-react": "^0.475.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/vite": "^4.0.0"
+  }
+}
