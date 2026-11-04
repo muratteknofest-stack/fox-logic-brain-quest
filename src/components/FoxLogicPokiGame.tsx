@@ -153,7 +153,13 @@ export const FoxLogicPokiGame: React.FC = () => {
         if (bgMusicRef.current) {
           bgMusicRef.current.stop();
         }
-        bgMusicRef.current = startBackgroundMusic(ctx, musicTrack, 0.35);
+        bgMusicRef.current = startBackgroundMusic(
+          ctx,
+          ctx.destination,
+          musicTrack,
+          70,
+          300
+        );
       }
     },
     [musicEnabled, musicTrack, getAudioCtx]
@@ -891,7 +897,7 @@ export const FoxLogicPokiGame: React.FC = () => {
             title="Oyun Müziğini Değiştir"
           >
             <Music className="w-3.5 h-3.5" />
-            <span>{MUSIC_TRACK_LABELS[musicTrack].split(' ')[0]}</span>
+            <span>{MUSIC_TRACK_LABELS[musicTrack].name}</span>
           </button>
 
           <button
@@ -904,8 +910,10 @@ export const FoxLogicPokiGame: React.FC = () => {
                   if (bgMusicRef.current) bgMusicRef.current.stop();
                   bgMusicRef.current = startBackgroundMusic(
                     ctx,
+                    ctx.destination,
                     musicTrack,
-                    0.35
+                    70,
+                    300
                   );
                 }
               }
