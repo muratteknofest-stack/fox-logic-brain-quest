@@ -16,6 +16,9 @@ import {
   Zap,
   CheckCircle2,
   AlertCircle,
+  Download,
+  Flame,
+  Brain,
 } from 'lucide-react';
 import { poki } from './poki/pokiBridge';
 import {
@@ -33,12 +36,13 @@ interface LevelProgress {
   bestTimeSec: number;
 }
 
-const STORAGE_KEY = 'fox_logic_progress_v1';
+const STORAGE_KEY = 'fox_logic_progress_v2';
 
 export const FoxLogicPokiGame: React.FC = () => {
   const [screen, setScreen] = useState<GameScreen>('TITLE');
   const [currentLevelId, setCurrentLevelId] = useState<number>(1);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [streakCount, setStreakCount] = useState<number>(0);
   const [progress, setProgress] = useState<Record<number, LevelProgress>>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -62,12 +66,11 @@ export const FoxLogicPokiGame: React.FC = () => {
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [isWrongShake, setIsWrongShake] = useState<boolean>(false);
   const [adMessage, setAdMessage] = useState<string | null>(null);
-  const [githubSyncStatus, setGithubSyncStatus] = useState<string | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   // Play synthetic retro audio FX
-  const playSound = (type: 'click' | 'correct' | 'wrong' | 'hint' | 'fanfare') => {
+  const playSound = (type: 'click' | 'correct' | 'wrong' | 'hint' | 'fanfare' | 'combo') => {
     if (!soundEnabled) return;
     try {
       const AudioCtx =
@@ -103,6 +106,15 @@ export const FoxLogicPokiGame: React.FC = () => {
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
         osc.start(now);
         osc.stop(now + 0.35);
+      } else if (type === 'combo') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(659.25, now);
+        osc.frequency.setValueAtTime(880, now + 0.1);
+        osc.frequency.setValueAtTime(1046.5, now + 0.2);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.4);
       } else if (type === 'wrong') {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(220, now);
@@ -156,6 +168,7 @@ export const FoxLogicPokiGame: React.FC = () => {
         if (prev <= 1) {
           clearInterval(interval);
           poki.gameplayStop();
+          setStreakCount(0);
           playSound('wrong');
           setScreen('GAME_OVER');
           return 0;
@@ -171,7 +184,7 @@ export const FoxLogicPokiGame: React.FC = () => {
 
   const handleStartLevel = (levelId: number) => {
     setCurrentLevelId(levelId);
-    setTimeLeft(60);
+    setTimeLeft(levelId >= 31 ? 75 : 60); // More time for advanced 3x3 Raven matrices
     setEliminatedOptions([]);
     setHintUsed(false);
     setSelectedOptionId(null);
@@ -187,13 +200,19 @@ export const FoxLogicPokiGame: React.FC = () => {
 
     if (optId === currentLevel.correctId) {
       // Correct!
-      playSound('correct');
+      const newStreak = streakCount + 1;
+      setStreakCount(newStreak);
+      if (newStreak >= 2) {
+        playSound('combo');
+      } else {
+        playSound('correct');
+      }
       poki.gameplayStop();
 
-      const timeSpent = 60 - timeLeft;
+      const timeSpent = (currentLevelId >= 31 ? 75 : 60) - timeLeft;
       let stars = 1;
-      if (timeSpent < 15 && !hintUsed) stars = 3;
-      else if (timeSpent < 35) stars = 2;
+      if (timeSpent < 20 && !hintUsed) stars = 3;
+      else if (timeSpent < 45) stars = 2;
 
       const nextProg = { ...progress };
       const currentStars = nextProg[currentLevelId]?.stars || 0;
@@ -219,6 +238,7 @@ export const FoxLogicPokiGame: React.FC = () => {
     } else {
       // Wrong!
       playSound('wrong');
+      setStreakCount(0);
       setIsWrongShake(true);
       setTimeout(() => {
         setIsWrongShake(false);
@@ -253,107 +273,147 @@ export const FoxLogicPokiGame: React.FC = () => {
     }
   };
 
-  // Total stars counter
+  // Total stars counter & estimated IQ rating
   const totalStars = Object.values(progress).reduce((acc, p) => acc + p.stars, 0);
+  const estimatedIQ = Math.min(160, 95 + Math.round(totalStars * 0.43));
 
-  // Render geometric shapes inside cards
-  const renderCardShape = (card: GameCard | GameOption | null) => {
+  // Render geometric shapes inside cards (with compound nested shapes and inner dots)
+  const renderCardShape = (card: GameCard | GameOption | null, isSmall = false) => {
     if (!card) {
       return (
-        <div className="w-full h-full flex items-center justify-center text-4xl font-black text-amber-400 animate-pulse">
-          ?
+        <div className="w-full h-full flex flex-col items-center justify-center">
+          <span className="text-3xl font-black text-amber-400 animate-pulse">?</span>
+          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold mt-0.5">Solve</span>
         </div>
       );
     }
 
-    const { shape, count, color, rotation, filled } = card;
+    const { shape, innerShape, innerDot, count, color, innerColor, rotation, filled } = card;
+    const baseSize = isSmall ? 22 : 30;
 
     const renderSingleShape = (key: number) => {
-      const style: React.CSSProperties = {
+      const transformStyle: React.CSSProperties = {
         transform: `rotate(${rotation}deg)`,
         transition: 'transform 0.3s ease',
       };
 
-      if (shape === 'star') {
-        return (
-          <svg key={key} style={style} className="w-8 h-8" viewBox="0 0 24 24">
-            <polygon
-              points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9"
-              fill={filled ? color : 'none'}
-              stroke={color}
-              strokeWidth="2.5"
-            />
-          </svg>
-        );
-      }
-      if (shape === 'circle') {
-        return (
-          <svg key={key} style={style} className="w-8 h-8" viewBox="0 0 24 24">
-            <circle
-              cx="12"
-              cy="12"
-              r="9"
-              fill={filled ? color : 'none'}
-              stroke={color}
-              strokeWidth="2.5"
-            />
-          </svg>
-        );
-      }
-      if (shape === 'triangle') {
-        return (
-          <svg key={key} style={style} className="w-8 h-8" viewBox="0 0 24 24">
-            <polygon
-              points="12,3 22,21 2,21"
-              fill={filled ? color : 'none'}
-              stroke={color}
-              strokeWidth="2.5"
-            />
-          </svg>
-        );
-      }
-      if (shape === 'diamond') {
-        return (
-          <svg key={key} style={style} className="w-8 h-8" viewBox="0 0 24 24">
-            <polygon
-              points="12,2 22,12 12,22 2,12"
-              fill={filled ? color : 'none'}
-              stroke={color}
-              strokeWidth="2.5"
-            />
-          </svg>
-        );
-      }
-      if (shape === 'arrow') {
-        return (
-          <svg key={key} style={style} className="w-8 h-8" viewBox="0 0 24 24">
-            <polygon
-              points="12,2 20,10 15,10 15,22 9,22 9,10 4,10"
-              fill={filled ? color : 'none'}
-              stroke={color}
-              strokeWidth="2"
-            />
-          </svg>
-        );
-      }
       return (
-        <svg key={key} style={style} className="w-8 h-8" viewBox="0 0 24 24">
-          <rect
-            x="4"
-            y="4"
-            width="16"
-            height="16"
-            rx="3"
-            fill={filled ? color : 'none'}
-            stroke={color}
-            strokeWidth="2.5"
-          />
-        </svg>
+        <div key={key} style={transformStyle} className="relative flex items-center justify-center">
+          {/* Outer Main Shape */}
+          {shape === 'star' && (
+            <svg style={{ width: baseSize, height: baseSize }} viewBox="0 0 24 24">
+              <polygon
+                points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9"
+                fill={filled ? color : 'none'}
+                stroke={color}
+                strokeWidth="2.5"
+              />
+            </svg>
+          )}
+          {shape === 'circle' && (
+            <svg style={{ width: baseSize, height: baseSize }} viewBox="0 0 24 24">
+              <circle
+                cx="12"
+                cy="12"
+                r="9.5"
+                fill={filled ? color : 'none'}
+                stroke={color}
+                strokeWidth="2.5"
+              />
+            </svg>
+          )}
+          {shape === 'triangle' && (
+            <svg style={{ width: baseSize, height: baseSize }} viewBox="0 0 24 24">
+              <polygon
+                points="12,3 22,21 2,21"
+                fill={filled ? color : 'none'}
+                stroke={color}
+                strokeWidth="2.5"
+              />
+            </svg>
+          )}
+          {shape === 'diamond' && (
+            <svg style={{ width: baseSize, height: baseSize }} viewBox="0 0 24 24">
+              <polygon
+                points="12,2 22,12 12,22 2,12"
+                fill={filled ? color : 'none'}
+                stroke={color}
+                strokeWidth="2.5"
+              />
+            </svg>
+          )}
+          {shape === 'pentagon' && (
+            <svg style={{ width: baseSize, height: baseSize }} viewBox="0 0 24 24">
+              <polygon
+                points="12,2 22,9 18,21 6,21 2,9"
+                fill={filled ? color : 'none'}
+                stroke={color}
+                strokeWidth="2.5"
+              />
+            </svg>
+          )}
+          {shape === 'hexagon' && (
+            <svg style={{ width: baseSize, height: baseSize }} viewBox="0 0 24 24">
+              <polygon
+                points="12,2 21,7 21,17 12,22 3,17 3,7"
+                fill={filled ? color : 'none'}
+                stroke={color}
+                strokeWidth="2.5"
+              />
+            </svg>
+          )}
+          {shape === 'arrow' && (
+            <svg style={{ width: baseSize, height: baseSize }} viewBox="0 0 24 24">
+              <polygon
+                points="12,2 21,10 16,10 16,22 8,22 8,10 3,10"
+                fill={filled ? color : 'none'}
+                stroke={color}
+                strokeWidth="2.5"
+              />
+            </svg>
+          )}
+          {shape === 'square' && (
+            <svg style={{ width: baseSize, height: baseSize }} viewBox="0 0 24 24">
+              <rect
+                x="3.5"
+                y="3.5"
+                width="17"
+                height="17"
+                rx="3"
+                fill={filled ? color : 'none'}
+                stroke={color}
+                strokeWidth="2.5"
+              />
+            </svg>
+          )}
+
+          {/* Nested Inner Shape / Dot */}
+          {innerShape === 'circle' && (
+            <div
+              className="absolute w-2.5 h-2.5 rounded-full border border-white"
+              style={{ backgroundColor: innerColor || '#FFFFFF' }}
+            />
+          )}
+          {innerShape === 'diamond' && (
+            <div
+              className="absolute w-2.5 h-2.5 rotate-45 border border-white"
+              style={{ backgroundColor: innerColor || '#FFFFFF' }}
+            />
+          )}
+          {innerShape === 'cross' && (
+            <div className="absolute text-[11px] font-black leading-none text-white">
+              +
+            </div>
+          )}
+          {innerDot && (
+            <div className="absolute w-2 h-2 rounded-full bg-amber-300 shadow-sm" />
+          )}
+        </div>
       );
     };
 
     return (
-      <div className="flex items-center justify-center gap-2 flex-wrap p-2">
+      <div className="flex items-center justify-center gap-1.5 flex-wrap p-1">
         {Array.from({ length: count }).map((_, i) => renderSingleShape(i))}
       </div>
     );
@@ -365,19 +425,26 @@ export const FoxLogicPokiGame: React.FC = () => {
       <header className="px-6 py-4 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <img
-            src="/assets/fox_icon.png"
+            src="./assets/fox_icon.png"
             alt="Fox"
             className="w-10 h-10 rounded-xl object-cover border border-amber-500/40"
           />
           <div>
             <h1 className="font-black text-white tracking-wide text-base flex items-center gap-2">
-              FOX LOGIC <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">POKI READY</span>
+              FOX LOGIC <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">MENSA & RAVEN IQ</span>
             </h1>
-            <div className="text-[11px] text-slate-400">Global HTML5 Casual Web Game</div>
+            <div className="text-[11px] text-slate-400">
+              {currentLevel.worldName} • {currentLevel.gridSize === 3 ? '3×3 Matrix' : '2×2 Induction'}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-indigo-300 text-xs font-bold">
+            <Brain className="w-3.5 h-3.5 text-indigo-400" />
+            <span>IQ {estimatedIQ}</span>
+          </div>
+
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-amber-400 text-xs font-bold">
             <Star className="w-3.5 h-3.5 fill-amber-400" />
             <span>{totalStars} / 150</span>
@@ -390,6 +457,16 @@ export const FoxLogicPokiGame: React.FC = () => {
           >
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
           </button>
+
+          <a
+            href="/api/poki/download-zip"
+            download="fox-logic-brain-quest-poki.zip"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:brightness-110 text-slate-950 text-xs font-black transition shadow cursor-pointer"
+            title="Poki İçin Hazır ZIP Dosyasını İndir"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Poki ZIP İndir
+          </a>
 
           <a
             href="https://github.com/muratteknofest-stack/fox-logic-brain-quest"
@@ -408,7 +485,7 @@ export const FoxLogicPokiGame: React.FC = () => {
         <div className="p-10 flex flex-col items-center justify-center text-center space-y-8 min-h-[520px]">
           <div className="relative">
             <img
-              src="/assets/fox_icon.png"
+              src="./assets/fox_icon.png"
               alt="Fox"
               className="w-32 h-32 rounded-3xl object-cover border-4 border-amber-400/80 shadow-2xl shadow-amber-500/30 animate-bounce"
             />
@@ -416,14 +493,14 @@ export const FoxLogicPokiGame: React.FC = () => {
 
           <div className="space-y-2 max-w-md">
             <h2 className="text-3xl font-black text-white tracking-tight">
-              FOX LOGIC: BRAIN QUEST
+              FOX LOGIC: ADVANCED BRAIN QUEST
             </h2>
             <p className="text-sm text-slate-300">
-              Solve visual Raven matrices, analogies, and geometry patterns. No language needed — purely visual brain training!
+              Challenge your mind with 50 progressive levels: 2×2 compound analogies and authentic <b>3×3 Raven Progressive Matrices</b>. Deceptive distractors require genuine logical deduction!
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs">
+          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
             <button
               onClick={() => {
                 playSound('click');
@@ -434,12 +511,23 @@ export const FoxLogicPokiGame: React.FC = () => {
               <Play className="w-5 h-5 fill-slate-950" />
               PLAY NOW (50 LEVELS)
             </button>
+
+            <a
+              href="/api/poki/download-zip"
+              download="fox-logic-brain-quest-poki.zip"
+              className="inline-flex items-center justify-center gap-2 px-5 py-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-emerald-500/40 text-emerald-300 font-bold text-xs transition cursor-pointer"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+              POKI ZIP İNDİR (2.0 MB)
+            </a>
           </div>
 
-          <div className="text-xs text-slate-500 flex items-center gap-2">
-            <span>Powered by PokiSDK</span>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-500">
+            <span>5 Worlds: Apprentice to Mensa Apex</span>
             <span>•</span>
-            <span>Mobile & Desktop 60 FPS</span>
+            <span>3×3 Raven Matrices</span>
+            <span>•</span>
+            <span>PokiSDK v2 Ready</span>
           </div>
         </div>
       )}
@@ -459,8 +547,9 @@ export const FoxLogicPokiGame: React.FC = () => {
               Main Menu
             </button>
 
-            <div className="text-xs font-bold text-amber-400">
-              World 1-5 • Select a Level
+            <div className="text-xs font-bold text-amber-400 flex items-center gap-2">
+              <Brain className="w-4 h-4" />
+              World 1-5 • Levels 1–50 (Raven & Mensa Tiers)
             </div>
           </div>
 
@@ -469,6 +558,7 @@ export const FoxLogicPokiGame: React.FC = () => {
             {ALL_POKI_LEVELS.map((lvl) => {
               const prog = progress[lvl.id] || { unlocked: false, stars: 0 };
               const isCurrent = currentLevelId === lvl.id;
+              const is3x3 = lvl.gridSize === 3;
 
               return (
                 <button
@@ -480,14 +570,20 @@ export const FoxLogicPokiGame: React.FC = () => {
                       ? 'bg-slate-950/40 border-slate-800 text-slate-600 opacity-60 cursor-not-allowed'
                       : isCurrent
                       ? 'bg-gradient-to-b from-amber-500 to-orange-600 border-amber-300 text-slate-950 shadow-lg shadow-amber-500/30 scale-105 font-black cursor-pointer'
+                      : is3x3
+                      ? 'bg-slate-800/90 hover:bg-slate-700 border-indigo-500/50 text-indigo-200 font-bold cursor-pointer'
                       : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-white font-bold cursor-pointer'
                   }`}
+                  title={`${lvl.worldName} • ${lvl.ruleName}`}
                 >
                   {!prog.unlocked ? (
                     <Lock className="w-4 h-4 text-slate-600" />
                   ) : (
                     <>
                       <span className="text-xs">{lvl.id}</span>
+                      {is3x3 && (
+                        <span className="text-[8px] font-black text-amber-400 leading-none">3×3</span>
+                      )}
                       <div className="flex gap-0.5 mt-0.5">
                         {Array.from({ length: 3 }).map((_, s) => (
                           <Star
@@ -511,9 +607,9 @@ export const FoxLogicPokiGame: React.FC = () => {
 
       {/* Screen 3: ACTIVE GAMEPLAY */}
       {screen === 'PLAYING' && (
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-5">
           {/* Top HUD */}
-          <div className="flex items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-800 pb-3">
             <button
               onClick={() => {
                 poki.gameplayStop();
@@ -523,30 +619,41 @@ export const FoxLogicPokiGame: React.FC = () => {
               className="text-xs text-slate-400 hover:text-white inline-flex items-center gap-1 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
-              Levels
+              Map
             </button>
 
-            <div className="text-center">
-              <div className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                Level {currentLevelId} of 50
+            <div className="text-center space-y-0.5">
+              <div className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center justify-center gap-2">
+                <span>{currentLevel.worldName} • Level {currentLevelId}</span>
+                {streakCount >= 2 && (
+                  <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-black flex items-center gap-1 animate-pulse">
+                    <Flame className="w-3 h-3 fill-orange-400" />
+                    {streakCount}x Combo!
+                  </span>
+                )}
               </div>
-              <div className="text-xs text-slate-400 font-mono">
-                ⏱️ {timeLeft}s remaining
+              <div className="text-[11px] text-indigo-300 font-semibold">
+                Rule: {currentLevel.ruleName}
               </div>
             </div>
 
-            <button
-              onClick={handleUseHint}
-              disabled={hintUsed}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow ${
-                hintUsed
-                  ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-amber-500 to-indigo-600 hover:brightness-110 text-slate-950 cursor-pointer animate-pulse'
-              }`}
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-              {hintUsed ? 'Hint Active' : '💡 Hint (Ad)'}
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-mono text-slate-400">
+                ⏱️ {timeLeft}s
+              </div>
+              <button
+                onClick={handleUseHint}
+                disabled={hintUsed}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow ${
+                  hintUsed
+                    ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-amber-500 to-indigo-600 hover:brightness-110 text-slate-950 cursor-pointer animate-pulse'
+                }`}
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                {hintUsed ? 'Hint Used' : '💡 Hint (Ad)'}
+              </button>
+            </div>
           </div>
 
           {adMessage && (
@@ -555,11 +662,11 @@ export const FoxLogicPokiGame: React.FC = () => {
             </div>
           )}
 
-          {/* Central 2x2 Board */}
+          {/* Central Puzzle Board: Dynamically 2x2 or 3x3 Raven Matrix */}
           <div
-            className={`max-w-md mx-auto aspect-square rounded-3xl bg-slate-950 border-2 border-slate-800 p-4 grid grid-cols-2 gap-3 transition-transform ${
-              isWrongShake ? 'translate-x-2 border-rose-500 duration-100' : ''
-            }`}
+            className={`max-w-md mx-auto aspect-square rounded-3xl bg-slate-950 border-2 border-slate-800 p-3 grid gap-2.5 transition-transform ${
+              currentLevel.gridSize === 3 ? 'grid-cols-3' : 'grid-cols-2'
+            } ${isWrongShake ? 'translate-x-2 border-rose-500 duration-100' : ''}`}
           >
             {currentLevel.cards.map((card, i) => (
               <div
@@ -570,12 +677,12 @@ export const FoxLogicPokiGame: React.FC = () => {
                     : 'bg-slate-900 border-slate-800'
                 }`}
               >
-                {renderCardShape(card)}
+                {renderCardShape(card, currentLevel.gridSize === 3)}
               </div>
             ))}
           </div>
 
-          {/* 4 Options Grid (A, B, C, D) */}
+          {/* 4 Deceptive Options Grid (A, B, C, D) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-xl mx-auto">
             {currentLevel.options.map((opt) => {
               const isEliminated = eliminatedOptions.includes(opt.id);
@@ -587,7 +694,7 @@ export const FoxLogicPokiGame: React.FC = () => {
                   key={opt.id}
                   disabled={isEliminated || selectedOptionId !== null}
                   onClick={() => handleSelectOption(opt.id)}
-                  className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-between p-3 transition transform active:scale-95 cursor-pointer ${
+                  className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-between p-2.5 transition transform active:scale-95 cursor-pointer ${
                     isEliminated
                       ? 'bg-slate-950/40 border-slate-800 opacity-20 cursor-not-allowed'
                       : isSelected && isCorrect
@@ -601,7 +708,7 @@ export const FoxLogicPokiGame: React.FC = () => {
                     {opt.id}
                   </span>
                   <div className="w-full flex-1 flex items-center justify-center">
-                    {renderCardShape(opt)}
+                    {renderCardShape(opt, false)}
                   </div>
                 </button>
               );
@@ -618,9 +725,9 @@ export const FoxLogicPokiGame: React.FC = () => {
           </div>
 
           <div className="space-y-1">
-            <h2 className="text-2xl font-black text-white">LEVEL COMPLETED!</h2>
+            <h2 className="text-2xl font-black text-white">BRILLIANT DEDUCTION!</h2>
             <p className="text-xs text-slate-400">
-              Fox is proud of your visual logic skills!
+              {currentLevel.hintExplanation}
             </p>
           </div>
 
@@ -667,9 +774,9 @@ export const FoxLogicPokiGame: React.FC = () => {
           </div>
 
           <div className="space-y-1">
-            <h2 className="text-2xl font-black text-white">TIME IS UP!</h2>
+            <h2 className="text-2xl font-black text-white">CHALLENGE FAILED</h2>
             <p className="text-xs text-slate-400">
-              Don't worry, every brain puzzle makes you sharper.
+              Analyze the row and column patterns carefully before making your move.
             </p>
           </div>
 
