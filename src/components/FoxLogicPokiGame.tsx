@@ -820,7 +820,13 @@ export const FoxLogicPokiGame: React.FC = () => {
 
           {/* 4 Option Buttons (A, B, C, D) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-xl mx-auto">
-            {puzzle.options.map((opt, optIndex) => {
+            {(
+              puzzle.matrixSpec?.options ||
+              puzzle.cubeSpec?.options ||
+              puzzle.shadowSpec?.options ||
+              puzzle.cipherSpec?.options ||
+              []
+            ).map((opt: any, optIndex: number) => {
               const isEliminated = eliminatedOptions.includes(optIndex);
               const isSelected = selectedOptionIndex === optIndex;
               const isCorrect = optIndex === puzzle.correctOptionIndex;
