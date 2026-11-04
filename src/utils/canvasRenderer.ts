@@ -19,6 +19,7 @@ export const REEL_THEME_CONFIGS: Record<
     cardBorder: string;
     accent: string;
     badgeBg: string;
+    slabBevel: string;
   }
 > = {
   space_academy: {
@@ -29,6 +30,7 @@ export const REEL_THEME_CONFIGS: Record<
     cardBorder: '#6366F1',
     accent: '#F59E0B',
     badgeBg: '#312E81',
+    slabBevel: '#4338CA',
   },
   neon_quiz: {
     name: 'Neon Yarışma',
@@ -38,6 +40,7 @@ export const REEL_THEME_CONFIGS: Record<
     cardBorder: '#06B6D4',
     accent: '#EC4899',
     badgeBg: '#0E7490',
+    slabBevel: '#0891B2',
   },
   playful_pop: {
     name: 'Oyun Odası',
@@ -47,6 +50,7 @@ export const REEL_THEME_CONFIGS: Record<
     cardBorder: '#F59E0B',
     accent: '#10B981',
     badgeBg: '#9D174D',
+    slabBevel: '#D97706',
   },
   classic_bilsem: {
     name: 'Klasik Bilsem',
@@ -56,6 +60,7 @@ export const REEL_THEME_CONFIGS: Record<
     cardBorder: '#3B82F6',
     accent: '#2563EB',
     badgeBg: '#1D4ED8',
+    slabBevel: '#2563EB',
   },
 };
 
@@ -106,6 +111,67 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
+/**
+ * Professional 3D Slab Card with Soft Ambient Occlusion and Extruded Bevel Depth
+ */
+function draw3DSlabCard(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+  fillColor: string,
+  borderColor: string,
+  borderWidth: number,
+  depth = 10,
+  bevelColor = 'rgba(0,0,0,0.22)',
+  shadowBlur = 28,
+  shadowOffsetY = 16
+) {
+  ctx.save();
+
+  // 1. Soft Drop Shadow (Ambient Occlusion)
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.38)';
+  ctx.shadowBlur = shadowBlur;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = shadowOffsetY;
+
+  // 2. 3D Bottom Extrusion Slab
+  drawRoundedRect(ctx, x, y + depth, w, h, r);
+  ctx.fillStyle = bevelColor;
+  ctx.fill();
+
+  // Reset shadow for main face
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  // 3. Top Face
+  drawRoundedRect(ctx, x, y, w, h, r);
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+
+  // 4. Subtle Specular Highlight Rim along top edge
+  ctx.save();
+  ctx.clip();
+  const rimGrad = ctx.createLinearGradient(x, y, x, y + 16);
+  rimGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+  rimGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = rimGrad;
+  ctx.fillRect(x, y, w, 16);
+  ctx.restore();
+
+  // 5. Border Stroke
+  if (borderWidth > 0) {
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = borderWidth;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
 function drawGeometricShape(
   ctx: CanvasRenderingContext2D,
   shape: ShapeType,
@@ -120,6 +186,12 @@ function drawGeometricShape(
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate((rotationDeg * Math.PI) / 180);
+
+  // Soft shape shadow for depth
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.18)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 3;
+
   ctx.fillStyle = color;
   ctx.strokeStyle = color;
   ctx.lineWidth = Math.max(4, radius * 0.16);
@@ -277,6 +349,9 @@ function drawMatrixCellContent(
   }
 }
 
+/**
+ * 3D Isometric Cube with Real-Time Shading, Specular Rim, and Ambient Occlusion
+ */
 function drawIsometricCube(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -287,20 +362,26 @@ function drawIsometricCube(
   const cos30 = Math.cos(Math.PI / 6) * size;
   const sin30 = Math.sin(Math.PI / 6) * size;
 
-  // Top face
+  ctx.save();
+
+  // Top face (Highlight Face with Radial Gradient)
   ctx.beginPath();
   ctx.moveTo(cx, cy - size);
   ctx.lineTo(cx + cos30, cy - sin30);
   ctx.lineTo(cx, cy);
   ctx.lineTo(cx - cos30, cy - sin30);
   ctx.closePath();
-  ctx.fillStyle = '#60A5FA';
+
+  const topGrad = ctx.createLinearGradient(cx - cos30, cy - size, cx + cos30, cy);
+  topGrad.addColorStop(0, '#BFDBFE'); // Soft light blue highlight
+  topGrad.addColorStop(1, '#93C5FD');
+  ctx.fillStyle = topGrad;
   ctx.fill();
-  ctx.strokeStyle = '#1E293B';
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#0F172A';
+  ctx.lineWidth = 2.6;
   ctx.stroke();
 
-  // Left face
+  // Left face (Mid-tone with baseColor)
   ctx.beginPath();
   ctx.moveTo(cx - cos30, cy - sin30);
   ctx.lineTo(cx, cy);
@@ -311,7 +392,7 @@ function drawIsometricCube(
   ctx.fill();
   ctx.stroke();
 
-  // Right face
+  // Right face (Deep Shadow Tone)
   ctx.beginPath();
   ctx.moveTo(cx, cy);
   ctx.lineTo(cx + cos30, cy - sin30);
@@ -321,6 +402,16 @@ function drawIsometricCube(
   ctx.fillStyle = '#1D4ED8';
   ctx.fill();
   ctx.stroke();
+
+  // Specular gleam line on top ridge
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - size * 0.9);
+  ctx.lineTo(cx, cy - size * 0.1);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.restore();
 }
 
 export interface ReelRenderState {
@@ -334,6 +425,14 @@ export interface ReelRenderState {
   showSubtitles: boolean;
 }
 
+/**
+ * Enhanced 9:16 Scene Canvas Render Function
+ * Features:
+ * - 3D Layer Slabs with Ambient Occlusion Shadows
+ * - Dynamic Floating Tilt & Breathing Animation
+ * - Parallax Floating Particle Orbs
+ * - Interactive 3D Depth on Matrices, Cubes, and Option Cards
+ */
 export function renderReelFrame(
   ctx: CanvasRenderingContext2D,
   state: ReelRenderState
@@ -350,35 +449,61 @@ export function renderReelFrame(
 
   const theme = REEL_THEME_CONFIGS[themeId] || REEL_THEME_CONFIGS.space_academy;
 
-  // 1. Background gradient
+  // 1. Dynamic Background with Parallax Floating Bokeh Orbs
   const grad = ctx.createLinearGradient(0, 0, 0, REEL_HEIGHT);
   grad.addColorStop(0, theme.bgTop);
   grad.addColorStop(1, theme.bgBottom);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, REEL_WIDTH, REEL_HEIGHT);
 
-  // Subtle decorative stars/dots
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  for (let i = 0; i < 18; i++) {
-    const sx = ((i * 173) % 980) + 50;
-    const sy = ((i * 293) % 1750) + 80;
-    const r = (i % 3) + 2;
+  // Parallax floating glowing bokeh orbs
+  ctx.save();
+  for (let i = 0; i < 22; i++) {
+    const speed = 0.4 + (i % 3) * 0.3;
+    const sx = ((i * 187 + Math.sin(elapsedSec * speed + i) * 35) % (REEL_WIDTH - 60)) + 30;
+    const sy = ((i * 243 + elapsedSec * 22 * speed) % (REEL_HEIGHT - 80)) + 40;
+    const r = (i % 4) * 3 + 4;
+    const pulseAlpha = 0.08 + Math.sin(elapsedSec * 2 + i) * 0.04;
+
     ctx.beginPath();
     ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${pulseAlpha})`;
     ctx.fill();
   }
+  ctx.restore();
 
-  // 2. Top Header Banner + BİLSEM Junior Tilki Maskotu
-  drawRoundedRect(ctx, 56, 64, REEL_WIDTH - 112, 146, 36);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
-  ctx.fill();
-  ctx.strokeStyle = theme.cardBorder;
-  ctx.lineWidth = 4;
-  ctx.stroke();
+  // 2. Top Header Banner with 3D Slab Depth + BİLSEM Junior Fox Mascot
+  const headX = 56;
+  const headY = 64;
+  const headW = REEL_WIDTH - 112;
+  const headH = 146;
 
+  draw3DSlabCard(
+    ctx,
+    headX,
+    headY,
+    headW,
+    headH,
+    36,
+    'rgba(15, 23, 42, 0.88)',
+    theme.cardBorder,
+    4,
+    8,
+    'rgba(0, 0, 0, 0.4)',
+    24,
+    12
+  );
+
+  // Bouncing mascot with 3D frame
   if (showMascot && cachedFoxImage) {
-    const bounce = Math.sin(elapsedSec * 4) * 5;
+    const bounce = Math.sin(elapsedSec * 4) * 6;
     ctx.save();
+    // Mascot shadow
+    ctx.beginPath();
+    ctx.ellipse(137, 200, 38, 8, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fill();
+
     drawRoundedRect(ctx, 82, 82 + bounce, 110, 110, 28);
     ctx.clip();
     ctx.drawImage(cachedFoxImage, 82, 82 + bounce, 110, 110);
@@ -407,29 +532,70 @@ export function renderReelFrame(
     166
   );
 
-  // 3. Question Prompt Banner
-  drawRoundedRect(ctx, 56, 234, REEL_WIDTH - 112, 130, 30);
-  ctx.fillStyle = 'rgba(30, 41, 59, 0.9)';
-  ctx.fill();
+  // 3. Question Prompt Banner with 3D Layer Depth
+  const promptX = 56;
+  const promptY = 234;
+  const promptW = REEL_WIDTH - 112;
+  const promptH = 130;
+
+  draw3DSlabCard(
+    ctx,
+    promptX,
+    promptY,
+    promptW,
+    promptH,
+    30,
+    'rgba(30, 41, 59, 0.94)',
+    theme.cardBorder,
+    3,
+    7,
+    'rgba(0, 0, 0, 0.35)',
+    20,
+    10
+  );
+
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '800 31px Inter, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(puzzle.questionPrompt, REEL_WIDTH / 2, 299, REEL_WIDTH - 160);
 
-  // 4. Main Puzzle Stage Card (390..1130)
+  // 4. Main Puzzle Stage Card with Dynamic 3D Perspective Tilt (390..1130)
   const stageX = 56;
   const stageY = 390;
   const stageW = REEL_WIDTH - 112;
   const stageH = 720;
+  const stageCenterX = stageX + stageW / 2;
+  const stageCenterY = stageY + stageH / 2;
 
-  drawRoundedRect(ctx, stageX, stageY, stageW, stageH, 42);
-  ctx.fillStyle = theme.cardBg;
-  ctx.fill();
-  ctx.strokeStyle = theme.cardBorder;
-  ctx.lineWidth = 6;
-  ctx.stroke();
+  // Dynamic 3D tilt calculations based on elapsedSec
+  const tiltAngle = Math.sin(elapsedSec * 1.5) * 0.014; // Subtle angle oscillation
+  const tiltScale = 1 + Math.sin(elapsedSec * 2.2) * 0.007; // Gentle breathing
 
+  ctx.save();
+  ctx.translate(stageCenterX, stageCenterY);
+  ctx.rotate(tiltAngle);
+  ctx.scale(tiltScale, tiltScale);
+  ctx.translate(-stageCenterX, -stageCenterY);
+
+  // 3D Slab with Extrusion Bevel
+  draw3DSlabCard(
+    ctx,
+    stageX,
+    stageY,
+    stageW,
+    stageH,
+    42,
+    theme.cardBg,
+    theme.cardBorder,
+    6,
+    12,
+    theme.slabBevel || '#D97706',
+    34,
+    18
+  );
+
+  // Category 1: 3x3 Raven Matrix with 3D Tactile Tiles
   if (puzzle.category === 'matrix' && puzzle.matrixSpec) {
     const gridSize = 3;
     const cellW = 196;
@@ -444,24 +610,52 @@ export function renderReelFrame(
       const x = startX + c * (cellW + gap);
       const y = startY + r * (cellW + gap);
 
-      drawRoundedRect(ctx, x, y, cellW, cellW, 28);
-      ctx.fillStyle = cell === null ? '#FEF3C7' : '#F1F5F9';
-      ctx.fill();
-      ctx.strokeStyle = cell === null ? '#F59E0B' : '#CBD5E1';
-      ctx.lineWidth = cell === null ? 5 : 3;
-      ctx.stroke();
+      if (cell === null) {
+        // Question cell with pulsing neon halo and 3D depth
+        const pulse = Math.sin(elapsedSec * 4) * 0.15;
+        draw3DSlabCard(
+          ctx,
+          x,
+          y,
+          cellW,
+          cellW,
+          28,
+          '#FEF3C7',
+          '#F59E0B',
+          5,
+          6,
+          '#D97706',
+          18,
+          8
+        );
 
-      if (cell) {
-        drawMatrixCellContent(ctx, cell, x + cellW / 2, y + cellW / 2, cellW);
-      } else {
         ctx.fillStyle = '#D97706';
         ctx.font = '900 88px Inter, system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('?', x + cellW / 2, y + cellW / 2);
+        ctx.fillText('?', x + cellW / 2, y + cellW / 2 + pulse * 4);
+      } else {
+        // Standard cell with 3D tactile tile depth
+        draw3DSlabCard(
+          ctx,
+          x,
+          y,
+          cellW,
+          cellW,
+          28,
+          '#F8FAFC',
+          '#CBD5E1',
+          3,
+          5,
+          '#94A3B8',
+          12,
+          6
+        );
+        drawMatrixCellContent(ctx, cell, x + cellW / 2, y + cellW / 2, cellW);
       }
     });
   } else if (puzzle.category === 'cube3d' && puzzle.cubeSpec) {
+    // Category 2: 3D Isometric Cube Stacking with Ground Shadow & Dynamic Angle Wobble
     const sortedCubes: CubeCoord[] = [...puzzle.cubeSpec.cubes].sort(
       (a, b) => a.x + a.y - (b.x + b.y) || a.z - b.z
     );
@@ -471,9 +665,23 @@ export function renderReelFrame(
     const cos30 = Math.cos(Math.PI / 6) * cubeSize;
     const sin30 = Math.sin(Math.PI / 6) * cubeSize;
 
+    // Ground shadow under 3D cube tower
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(originX, originY + 40, 220, 48, 0, 0, Math.PI * 2);
+    const groundShadow = ctx.createRadialGradient(originX, originY + 40, 20, originX, originY + 40, 220);
+    groundShadow.addColorStop(0, 'rgba(15, 23, 42, 0.45)');
+    groundShadow.addColorStop(1, 'rgba(15, 23, 42, 0)');
+    ctx.fillStyle = groundShadow;
+    ctx.fill();
+    ctx.restore();
+
+    // Floating cube sway animation
+    const cubeHover = Math.sin(elapsedSec * 2.5) * 5;
+
     for (const c of sortedCubes) {
       const screenX = originX + (c.x - c.y) * cos30;
-      const screenY = originY + (c.x + c.y) * sin30 - c.z * cubeSize;
+      const screenY = originY + (c.x + c.y) * sin30 - c.z * cubeSize + cubeHover;
       drawIsometricCube(
         ctx,
         screenX,
@@ -483,16 +691,27 @@ export function renderReelFrame(
       );
     }
   } else if (puzzle.category === 'shadow' && puzzle.shadowSpec) {
+    // Category 3: Shadow & Reflection with 3D Pedestal and Spotlight
     const { target } = puzzle.shadowSpec;
     const cx = stageX + stageW / 2;
     const cy = stageY + stageH / 2;
 
-    drawRoundedRect(ctx, cx - 220, cy - 220, 440, 440, 44);
-    ctx.fillStyle = '#F8FAFC';
-    ctx.fill();
-    ctx.strokeStyle = '#CBD5E1';
-    ctx.lineWidth = 4;
-    ctx.stroke();
+    // Target Figure Pedestal
+    draw3DSlabCard(
+      ctx,
+      cx - 220,
+      cy - 220,
+      440,
+      440,
+      44,
+      '#FFFFFF',
+      '#CBD5E1',
+      4,
+      8,
+      '#94A3B8',
+      20,
+      10
+    );
 
     drawGeometricShape(
       ctx,
@@ -517,18 +736,28 @@ export function renderReelFrame(
       true
     );
   } else if (puzzle.category === 'cipher' && puzzle.cipherSpec) {
+    // Category 4: Symbol Cipher Rows with 3D Row Slabs
     const rows = puzzle.cipherSpec.rows;
     const rowH = 135;
     const startY = stageY + 65;
 
     rows.forEach((row, rIdx) => {
       const y = startY + rIdx * (rowH + 18);
-      drawRoundedRect(ctx, stageX + 55, y, stageW - 110, rowH, 26);
-      ctx.fillStyle = row.isQuestionRow ? '#FEF3C7' : '#F1F5F9';
-      ctx.fill();
-      ctx.strokeStyle = row.isQuestionRow ? '#F59E0B' : '#CBD5E1';
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      draw3DSlabCard(
+        ctx,
+        stageX + 55,
+        y,
+        stageW - 110,
+        rowH,
+        26,
+        row.isQuestionRow ? '#FEF3C7' : '#FFFFFF',
+        row.isQuestionRow ? '#F59E0B' : '#CBD5E1',
+        3,
+        6,
+        row.isQuestionRow ? '#D97706' : '#94A3B8',
+        14,
+        6
+      );
 
       row.symbols.forEach((sym, sIdx) => {
         const sx = stageX + 150 + sIdx * 125;
@@ -558,7 +787,9 @@ export function renderReelFrame(
     });
   }
 
-  // 5. Countdown Bar (1138..1210)
+  ctx.restore(); // Restore Stage Tilt Transform
+
+  // 5. Countdown Bar with Glowing 3D Glass Tube (1138..1210)
   const countdownStart = 1.5;
   const remaining = Math.max(
     0,
@@ -566,14 +797,35 @@ export function renderReelFrame(
   );
   const ratio = remaining / Math.max(1, countdownSeconds);
 
-  drawRoundedRect(ctx, 56, 1138, REEL_WIDTH - 112, 64, 32);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-  ctx.fill();
+  draw3DSlabCard(
+    ctx,
+    56,
+    1138,
+    REEL_WIDTH - 112,
+    64,
+    32,
+    'rgba(15, 23, 42, 0.92)',
+    '#334155',
+    3,
+    5,
+    '#0F172A',
+    16,
+    8
+  );
 
   const fillW = Math.max(64, (REEL_WIDTH - 124) * ratio);
   drawRoundedRect(ctx, 62, 1144, fillW, 52, 26);
   ctx.fillStyle = remaining > 1.5 ? theme.accent : '#EF4444';
   ctx.fill();
+
+  // Animated traveling gleam light on progress bar
+  const gleamOffset = ((elapsedSec * 280) % fillW);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(62 + gleamOffset, 1170, 24, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+  ctx.fill();
+  ctx.restore();
 
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '900 28px Inter, system-ui, sans-serif';
@@ -589,7 +841,7 @@ export function renderReelFrame(
     1170
   );
 
-  // 6. Options Grid (2x2 for A, B, C, D) (1230..1690)
+  // 6. Options Grid (2x2 for A, B, C, D) with Floating 3D Bobbing (1230..1690)
   const optLetters = ['A', 'B', 'C', 'D'];
   const optW = (REEL_WIDTH - 144) / 2;
   const optH = 210;
@@ -597,22 +849,49 @@ export function renderReelFrame(
   for (let i = 0; i < 4; i++) {
     const col = i % 2;
     const row = Math.floor(i / 2);
+    // Subtle staggered vertical bobbing
+    const bobY = Math.sin(elapsedSec * 3 + i * 0.85) * 5;
     const ox = 56 + col * (optW + 32);
-    const oy = 1230 + row * (optH + 28);
+    const oy = 1230 + row * (optH + 28) + bobY;
     const isWinner =
-      revealAnswer && elapsedSec >= countdownStart + countdownSeconds && i === puzzle.correctOptionIndex;
+      revealAnswer &&
+      elapsedSec >= countdownStart + countdownSeconds &&
+      i === puzzle.correctOptionIndex;
 
-    drawRoundedRect(ctx, ox, oy, optW, optH, 32);
-    ctx.fillStyle = isWinner ? '#DCFCE7' : '#FFFFFF';
-    ctx.fill();
-    ctx.strokeStyle = isWinner ? '#16A34A' : theme.cardBorder;
-    ctx.lineWidth = isWinner ? 8 : 4;
-    ctx.stroke();
+    // 3D Slab Card for each option
+    draw3DSlabCard(
+      ctx,
+      ox,
+      oy,
+      optW,
+      optH,
+      32,
+      isWinner ? '#DCFCE7' : '#FFFFFF',
+      isWinner ? '#16A34A' : theme.cardBorder,
+      isWinner ? 8 : 4,
+      8,
+      isWinner ? '#15803D' : theme.slabBevel || '#4338CA',
+      24,
+      12
+    );
 
-    // Option Letter Badge
-    drawRoundedRect(ctx, ox + 22, oy + 22, 68, 68, 20);
-    ctx.fillStyle = isWinner ? '#16A34A' : theme.badgeBg;
-    ctx.fill();
+    // Option 3D Letter Badge
+    draw3DSlabCard(
+      ctx,
+      ox + 22,
+      oy + 22,
+      68,
+      68,
+      20,
+      isWinner ? '#16A34A' : theme.badgeBg,
+      '#FFFFFF',
+      2,
+      4,
+      'rgba(0,0,0,0.3)',
+      10,
+      4
+    );
+
     ctx.fillStyle = '#FFFFFF';
     ctx.font = '900 36px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
@@ -671,19 +950,27 @@ export function renderReelFrame(
     }
   }
 
-  // 7. Karaoke Subtitles / Footer Call-to-Action (1730..1870)
+  // 7. Karaoke Subtitles / Footer Call-to-Action with 3D Slab (1720..1860)
   if (showSubtitles) {
     const isEndingHook = elapsedSec >= countdownStart + countdownSeconds + 1.2;
 
-    drawRoundedRect(ctx, 48, 1720, REEL_WIDTH - 96, 140, 28);
-    ctx.fillStyle = isEndingHook ? 'rgba(48, 25, 105, 0.95)' : 'rgba(15, 23, 42, 0.92)';
-    ctx.fill();
-    ctx.strokeStyle = isEndingHook ? '#F59E0B' : theme.accent;
-    ctx.lineWidth = isEndingHook ? 4 : 3;
-    ctx.stroke();
+    draw3DSlabCard(
+      ctx,
+      48,
+      1720,
+      REEL_WIDTH - 96,
+      140,
+      28,
+      isEndingHook ? 'rgba(48, 25, 105, 0.96)' : 'rgba(15, 23, 42, 0.94)',
+      isEndingHook ? '#F59E0B' : theme.accent,
+      isEndingHook ? 4 : 3,
+      7,
+      'rgba(0,0,0,0.4)',
+      20,
+      10
+    );
 
     if (isEndingHook) {
-      // High-converting viral CTA
       ctx.fillStyle = '#F59E0B';
       ctx.font = '900 24px Inter, system-ui, sans-serif';
       ctx.textAlign = 'center';

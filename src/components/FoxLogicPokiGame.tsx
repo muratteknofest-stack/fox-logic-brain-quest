@@ -115,6 +115,33 @@ export const FoxLogicPokiGame: React.FC = () => {
     'İpuçlarını incele ve doğru şıkkı yakala! 🦊✨'
   );
 
+  // 3D Tilt & Gamification States
+  const [stageTilt, setStageTilt] = useState<{ rx: number; ry: number }>({ rx: 0, ry: 0 });
+  const [xpFloater, setXpFloater] = useState<{ id: number; text: string } | null>(null);
+
+  const handleStageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    setStageTilt({ rx: -y * 14, ry: x * 14 });
+  };
+
+  const handleStageMouseLeave = () => {
+    setStageTilt({ rx: 0, ry: 0 });
+  };
+
+  const handleFoxClick = () => {
+    playSound('combo');
+    const tips = [
+      'Beni tıkladın! 🦊 Çok iyi gidiyorsun, devam et!',
+      'Gözün yükseklerde olsun, BİLSEM IQ seviyen tırmanıyor! 🚀🦊',
+      'Acele etme, örüntüdeki dönüş kurallarını iyi yakala! 🧠✨',
+      'Görünmeyen küpleri de saymayı unutma! 🧊🦊',
+      'Harika gidiyorsun! Kombo alevini söndürme! 🔥🦊',
+    ];
+    setFoxSpeech(tips[Math.floor(Math.random() * tips.length)]);
+  };
+
   // Audio refs
   const audioCtxRef = useRef<AudioContext | null>(null);
   const bgMusicRef = useRef<BackgroundMusicController | null>(null);
@@ -408,7 +435,13 @@ export const FoxLogicPokiGame: React.FC = () => {
       // Correct Answer!
       const newStreak = streakCount + 1;
       setStreakCount(newStreak);
-      setXpPoints((prev) => prev + 120 + newStreak * 30);
+      const gainedXp = 120 + newStreak * 30;
+      setXpPoints((prev) => prev + gainedXp);
+      setXpFloater({
+        id: Date.now(),
+        text: `+${gainedXp} XP ${newStreak >= 2 ? `🔥 ${newStreak}x KOMBO!` : '✨ BİLSEM DEHASI!'}`,
+      });
+      setTimeout(() => setXpFloater(null), 2000);
       setCelebratingCorrect(true);
       setConfettiBurstKey((k) => k + 1);
       setFoxSpeech('SÜPERSİN! Tam bir BİLSEM Zeka Küpüsün! 🎉🦊👑');
@@ -772,12 +805,12 @@ export const FoxLogicPokiGame: React.FC = () => {
 
     return (
       <g>
-        {/* Top Face (Light Highlight) */}
+        {/* Top Face (Specular Highlight) */}
         <polygon
           points={topPoints}
-          fill="#93C5FD"
+          fill="#BAE6FD"
           stroke="#0F172A"
-          strokeWidth="2.2"
+          strokeWidth="2.4"
           strokeLinejoin="round"
         />
         {/* Left Face (Primary Palette Color) */}
@@ -785,7 +818,7 @@ export const FoxLogicPokiGame: React.FC = () => {
           points={leftPoints}
           fill={baseColor}
           stroke="#0F172A"
-          strokeWidth="2.2"
+          strokeWidth="2.4"
           strokeLinejoin="round"
         />
         {/* Right Face (Deep Shadow) */}
@@ -793,8 +826,17 @@ export const FoxLogicPokiGame: React.FC = () => {
           points={rightPoints}
           fill="#1D4ED8"
           stroke="#0F172A"
-          strokeWidth="2.2"
+          strokeWidth="2.4"
           strokeLinejoin="round"
+        />
+        {/* Top Face Specular Glare Line */}
+        <line
+          x1={cx}
+          y1={cy - size * 0.9}
+          x2={cx}
+          y2={cy - size * 0.12}
+          stroke="rgba(255, 255, 255, 0.55)"
+          strokeWidth="1.8"
         />
       </g>
     );
@@ -1256,21 +1298,28 @@ export const FoxLogicPokiGame: React.FC = () => {
             </div>
           )}
 
-          {/* Question Prompt & Mascot Coach Bubble */}
+          {/* Question Prompt & Interactive Mascot Coach Bubble */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-gradient-to-r from-indigo-950/90 via-purple-900/90 to-indigo-950/90 px-4 py-3 rounded-2xl border-2 border-amber-400/50 shadow-md">
-            <div className="flex items-center gap-3">
-              <img
-                src="/assets/aistudio/B_LSEM_Junior_tilki_ikonu_e352f23b.png"
-                alt="Fox Coach"
-                className={`w-11 h-11 rounded-2xl object-cover border-2 border-amber-400 shadow ${
-                  celebratingCorrect ? 'animate-bounce' : ''
-                }`}
-              />
+            <div
+              onClick={handleFoxClick}
+              className="flex items-center gap-3 cursor-pointer group"
+              title="Tilki Koça dokun, ipucu al!"
+            >
+              <div className="relative">
+                <img
+                  src="/assets/aistudio/B_LSEM_Junior_tilki_ikonu_e352f23b.png"
+                  alt="Fox Coach"
+                  className={`w-12 h-12 rounded-2xl object-cover border-2 border-amber-400 shadow group-hover:scale-110 active:scale-95 transition ${
+                    celebratingCorrect ? 'animate-bounce' : ''
+                  }`}
+                />
+                <span className="absolute -top-1 -right-1 text-xs">💬</span>
+              </div>
               <div className="text-left">
                 <div className="text-xs sm:text-sm font-black text-white">
                   {puzzle.questionPrompt}
                 </div>
-                <div className="text-[11px] font-bold text-amber-300">
+                <div className="text-[11px] font-bold text-amber-300 group-hover:text-amber-200 transition">
                   {foxSpeech}
                 </div>
               </div>
@@ -1300,17 +1349,31 @@ export const FoxLogicPokiGame: React.FC = () => {
           </div>
 
           {/* ================================================================= */}
-          {/* BRIGHT BİLSEM JUNIOR WHITE/CREAM PUZZLE STAGE CARD                */}
+          {/* BRIGHT BİLSEM JUNIOR 3D TILT PUZZLE STAGE CARD                     */}
           {/* ================================================================= */}
           <div
-            className={`relative max-w-xl mx-auto rounded-[28px] bg-[#FFFBEB] border-4 border-amber-400 shadow-[0_10px_0_#b45309] p-4 sm:p-6 min-h-[290px] flex items-center justify-center transition-transform ${
+            onMouseMove={handleStageMouseMove}
+            onMouseLeave={handleStageMouseLeave}
+            style={{
+              transform: `perspective(1000px) rotateX(${stageTilt.rx}deg) rotateY(${stageTilt.ry}deg)`,
+              transformStyle: 'preserve-3d',
+              transition: 'transform 0.12s ease-out',
+            }}
+            className={`relative max-w-xl mx-auto rounded-[28px] bg-[#FFFBEB] border-4 border-amber-400 shadow-[0_12px_0_#b45309] p-4 sm:p-6 min-h-[290px] flex items-center justify-center transition-all ${
               isWrongShake
-                ? 'translate-x-3 border-rose-500 shadow-[0_10px_0_#9f1239]'
+                ? 'translate-x-3 border-rose-500 shadow-[0_12px_0_#9f1239]'
                 : celebratingCorrect
-                ? 'scale-[1.02] border-emerald-400 shadow-[0_10px_0_#059669]'
+                ? 'scale-[1.02] border-emerald-400 shadow-[0_12px_0_#059669]'
                 : ''
             }`}
           >
+            {/* XP Floater Badge when user scores */}
+            {xpFloater && (
+              <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-30 px-5 py-2 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 border-2 border-white text-slate-950 font-black text-sm shadow-xl animate-bounce">
+                {xpFloater.text}
+              </div>
+            )}
+
             {/* Floating Celebration Popup inside Stage when Correct */}
             {celebratingCorrect && (
               <div className="absolute inset-0 z-20 bg-emerald-500/20 backdrop-blur-[2px] rounded-[24px] flex flex-col items-center justify-center animate-fadeIn">
@@ -1345,6 +1408,9 @@ export const FoxLogicPokiGame: React.FC = () => {
                   className="w-72 h-64 sm:w-80 sm:h-68 overflow-visible drop-shadow-md"
                   viewBox="-160 -150 320 260"
                 >
+                  {/* Soft 3D Ground Shadow */}
+                  <ellipse cx="0" cy="85" rx="130" ry="24" fill="rgba(15, 23, 42, 0.18)" />
+
                   {[...puzzle.cubeSpec.cubes]
                     .sort(
                       (a: CubeCoord, b: CubeCoord) =>
